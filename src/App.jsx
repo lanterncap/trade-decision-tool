@@ -56,25 +56,25 @@ function Header({ title, onBack, showLogo = true }) {
 }
 
 const TYPE_A_CONFIG = {
-  name: 'Tipping Point',
+  name: 'Tipping Point-IPO',
   sections: [
     { title: 'Catalyst Quality', maxPoints: 30, signals: [
-      { id: 'catalyst_binary', label: 'Catalyst is binary/verifiable', max: 10, hints: ['10: Hard date/event', '7: Semi-hard', '4: Soft', '0: None'] },
-      { id: 'catalyst_timing', label: 'Catalyst timing', max: 10, hints: ['10: <2 weeks', '7: 2-4 weeks', '4: 1-3 months', '0: Vague'] },
-      { id: 'catalyst_priced', label: "Market hasn't priced it", max: 10, hints: ['10: Under-covered', '7: Variant view', '4: Magnitude diff', '0: Consensus'] },
+      { id: 'catalyst_quality', label: 'Catalyst strength', max: 10, hints: ['10: Fundamental changing', '7: Semi', '4: Soft', '0: None'] },
+      { id: 'sector_quality', label: 'Sector timing', max: 10, hints: ['10: Very strong', '7: Strong', '4: Weak', '0: Very weak'] },
+      { id: 'catalyst_priced', label: "Market hasn't priced it", max: 10, hints: ['10: Under-covered', '7: Variant view', '4: Bullish', '0: Consensus'] },
     ]},
     { title: 'Technical Confirmation', maxPoints: 20, signals: [
       { id: 'breakout_quality', label: 'Breakout quality', max: 12, hints: ['12: Base + vol >150%', '9: Vol 100-150%', '5: Weak volume', '0: Chasing'] },
       { id: 'overhead_supply', label: 'Overhead supply', max: 8, hints: ['8: Minimal', '5: Some <15%', '2: Significant', '0: Massive'] },
     ]},
     { title: 'Fundamental Setup', maxPoints: 20, signals: [
-      { id: 'thesis_clarity', label: 'Thesis clarity', max: 8, hints: ['8: One sentence edge', '5: Nuanced', '2: Fuzzy', '0: None'] },
-      { id: 'earnings_inflection', label: 'Earnings/revenue inflection', max: 6, hints: ['6: Next Q inflection', '4: 2-3Q out', '2: Stable', '0: Deteriorating'] },
+      { id: 'thesis_clarity', label: 'Thesis clarity - my edge', max: 8, hints: ['8: One sentence edge', '5: Nuanced', '2: Fuzzy', '0: None'] },
+      { id: 'continuous_newsflow', label: 'Newsflow', max: 6, hints: ['6: 2-3 Q', '4: 1Q', '2: next month', '0: 1 time pump'] },
       { id: 'insider_signal', label: 'Management/insider signal', max: 6, hints: ['6: Recent buying', '4: Holding', '2: Unproven', '0: Selling'] },
     ]},
     { title: 'Risk Definition', maxPoints: 30, signals: [
       { id: 'stop_defined', label: 'Stop-loss defined', max: 12, hints: ['12: Tech + thesis stop', '9: Tech only', '5: Rough', '0: None'] },
-      { id: 'size_calibrated', label: 'Position size calibrated', max: 10, hints: ['10: Max loss 1-2%', '6: Roughly ok', '3: Arbitrary', '0: Ignoring'] },
+      { id: 'tilting', label: 'Recent tilt?', max: 10, hints: ['10: Very calm', '6: Calm', '3: Nervous', '0: Revenge trading'] },
       { id: 'exit_target', label: 'Exit target & horizon', max: 8, hints: ['8: Both defined', '5: One defined', '2: Vague', '0: None'] },
     ]}
   ]
@@ -106,11 +106,11 @@ const TYPE_B_CONFIG = {
 };
 
 function getDecision(score) {
-  if (score < 60) return { text: 'NO TRADE', color: colors.danger, size: '0%', bg: '#fef2f2' };
-  if (score < 70) return { text: 'LOW CONVICTION', color: colors.warning, size: '5-10%', bg: '#fffbeb' };
-  if (score < 80) return { text: 'MEDIUM', color: colors.typeA, size: '10-20%', bg: '#eff6ff' };
-  if (score < 90) return { text: 'HIGH CONVICTION', color: colors.success, size: '20-25%', bg: '#ecfdf5' };
-  return { text: 'MAXIMUM', color: colors.success, size: '25-30%', bg: '#ecfdf5' };
+  if (score < 60) return { text: 'NO TRADE', color: colors.danger, size: '$0K', sizeNum: 0, bg: '#fef2f2' };
+  if (score < 70) return { text: 'LOW CONVICTION', color: colors.warning, size: '$10-25K', sizeNum: 10, bg: '#fffbeb' };
+  if (score < 80) return { text: 'MEDIUM', color: colors.typeA, size: '$25-50K', sizeNum: 25, bg: '#eff6ff' };
+  if (score < 90) return { text: 'HIGH CONVICTION', color: colors.success, size: '$50-75K', sizeNum: 50, bg: '#ecfdf5' };
+  return { text: 'MAXIMUM', color: colors.success, size: '$75-100K', sizeNum: 75, bg: '#ecfdf5' };
 }
 
 function SignalInput({ signal, value, onChange }) {
@@ -161,13 +161,13 @@ function Scorecard({ type, onLog, onCancel }) {
       plannedStop: tradeInfo.stop,
       plannedTarget: tradeInfo.target,
       thesis: tradeInfo.thesis,
-      // Execution fields - to be filled later
       executed: false,
       actualSize: null,
       actualEntry: null,
       actualExit: null,
       exitDate: null,
       pnl: null,
+      dollarPnl: null,
       notes: ''
     });
   };
@@ -218,21 +218,28 @@ function Scorecard({ type, onLog, onCancel }) {
   );
 }
 
-function PendingEntry({ entry, onExecute, onSkip, onDelete }) {
+function PendingEntry({ entry, onUpdate, onExecute, onSkip, onDelete }) {
   const [expanded, setExpanded] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [executing, setExecuting] = useState(false);
+  const [editData, setEditData] = useState({ ...entry });
   const [execData, setExecData] = useState({ actualSize: '', actualEntry: '' });
   const accent = entry.type === 'A' ? colors.typeA : colors.typeB;
 
+  const handleSaveEdit = () => {
+    onUpdate(editData);
+    setEditing(false);
+  };
+
   const handleExecute = () => {
-    if (!execData.actualSize || !execData.actualEntry) { alert('Please fill in actual size and entry price'); return; }
+    if (!execData.actualSize || !execData.actualEntry) { alert('Please fill in size ($K) and entry price'); return; }
     onExecute(entry.id, { actualSize: execData.actualSize, actualEntry: execData.actualEntry, executed: true });
     setExecuting(false);
   };
 
   return (
     <div style={{ background: colors.white, borderRadius: 12, marginBottom: 10, overflow: 'hidden', border: `1px solid ${colors.border}` }}>
-      <div onClick={() => setExpanded(!expanded)} style={{ padding: 14, cursor: 'pointer', borderLeft: `4px solid ${accent}` }}>
+      <div onClick={() => !editing && !executing && setExpanded(!expanded)} style={{ padding: 14, cursor: 'pointer', borderLeft: `4px solid ${accent}` }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
@@ -250,13 +257,51 @@ function PendingEntry({ entry, onExecute, onSkip, onDelete }) {
       </div>
       {expanded && (
         <div style={{ padding: '0 14px 14px', borderTop: `1px solid ${colors.border}` }}>
-          {executing ? (
+          {editing ? (
+            <div style={{ paddingTop: 12 }}>
+              <div style={{ fontSize: 11, color: colors.neutral, marginBottom: 8, fontWeight: 600 }}>EDIT TRADE DETAILS</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+                <div>
+                  <label style={{ fontSize: 10, color: colors.neutral }}>Ticker</label>
+                  <input type="text" value={editData.ticker} onChange={(e) => setEditData(prev => ({ ...prev, ticker: e.target.value.toUpperCase() }))} style={{ width: '100%', padding: 10, border: `1px solid ${colors.border}`, borderRadius: 6, boxSizing: 'border-box', marginTop: 4, fontSize: 13, fontWeight: 600 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, color: colors.neutral }}>Date</label>
+                  <input type="date" value={editData.date} onChange={(e) => setEditData(prev => ({ ...prev, date: e.target.value }))} style={{ width: '100%', padding: 10, border: `1px solid ${colors.border}`, borderRadius: 6, boxSizing: 'border-box', marginTop: 4, fontSize: 13 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, color: colors.neutral }}>Planned Entry</label>
+                  <input type="number" value={editData.plannedEntry || ''} onChange={(e) => setEditData(prev => ({ ...prev, plannedEntry: e.target.value }))} style={{ width: '100%', padding: 10, border: `1px solid ${colors.border}`, borderRadius: 6, boxSizing: 'border-box', marginTop: 4, fontSize: 13 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, color: colors.neutral }}>Planned Stop</label>
+                  <input type="number" value={editData.plannedStop || ''} onChange={(e) => setEditData(prev => ({ ...prev, plannedStop: e.target.value }))} style={{ width: '100%', padding: 10, border: `1px solid ${colors.border}`, borderRadius: 6, boxSizing: 'border-box', marginTop: 4, fontSize: 13 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, color: colors.neutral }}>Planned Target</label>
+                  <input type="number" value={editData.plannedTarget || ''} onChange={(e) => setEditData(prev => ({ ...prev, plannedTarget: e.target.value }))} style={{ width: '100%', padding: 10, border: `1px solid ${colors.border}`, borderRadius: 6, boxSizing: 'border-box', marginTop: 4, fontSize: 13 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, color: colors.neutral }}>Score</label>
+                  <input type="number" value={editData.score} onChange={(e) => setEditData(prev => ({ ...prev, score: parseInt(e.target.value) || 0 }))} style={{ width: '100%', padding: 10, border: `1px solid ${colors.border}`, borderRadius: 6, boxSizing: 'border-box', marginTop: 4, fontSize: 13 }} />
+                </div>
+              </div>
+              <div style={{ marginBottom: 10 }}>
+                <label style={{ fontSize: 10, color: colors.neutral }}>Thesis</label>
+                <textarea value={editData.thesis || ''} onChange={(e) => setEditData(prev => ({ ...prev, thesis: e.target.value }))} style={{ width: '100%', padding: 10, border: `1px solid ${colors.border}`, borderRadius: 6, resize: 'none', minHeight: 50, boxSizing: 'border-box', marginTop: 4, fontSize: 13, fontFamily: 'inherit' }} />
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={handleSaveEdit} style={{ flex: 1, padding: 11, background: colors.primary, color: colors.white, border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13 }}>Save</button>
+                <button onClick={() => { setEditing(false); setEditData({ ...entry }); }} style={{ flex: 1, padding: 11, background: colors.light, color: colors.neutral, border: `1px solid ${colors.border}`, borderRadius: 8, fontSize: 13 }}>Cancel</button>
+              </div>
+            </div>
+          ) : executing ? (
             <div style={{ paddingTop: 12 }}>
               <div style={{ fontSize: 11, color: colors.neutral, marginBottom: 8, fontWeight: 600 }}>RECORD EXECUTION</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
                 <div>
-                  <label style={{ fontSize: 10, color: colors.neutral }}>Actual Size %</label>
-                  <input type="text" placeholder="e.g. 15%" value={execData.actualSize} onChange={(e) => setExecData(prev => ({ ...prev, actualSize: e.target.value }))} style={{ width: '100%', padding: 10, border: `1px solid ${colors.border}`, borderRadius: 6, boxSizing: 'border-box', marginTop: 4, fontSize: 13 }} />
+                  <label style={{ fontSize: 10, color: colors.neutral }}>Position Size ($K)</label>
+                  <input type="number" placeholder="e.g. 50" value={execData.actualSize} onChange={(e) => setExecData(prev => ({ ...prev, actualSize: e.target.value }))} style={{ width: '100%', padding: 10, border: `1px solid ${colors.border}`, borderRadius: 6, boxSizing: 'border-box', marginTop: 4, fontSize: 13 }} />
                 </div>
                 <div>
                   <label style={{ fontSize: 10, color: colors.neutral }}>Actual Entry Price</label>
@@ -277,9 +322,10 @@ function PendingEntry({ entry, onExecute, onSkip, onDelete }) {
                 <div><span style={{ color: colors.neutral }}>Plan Target:</span> <strong>{entry.plannedTarget || '—'}</strong></div>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => setExecuting(true)} style={{ flex: 1, padding: 11, background: colors.success, color: colors.white, border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13 }}>I Took This Trade</button>
-                <button onClick={() => onSkip(entry.id)} style={{ flex: 1, padding: 11, background: colors.light, color: colors.neutral, border: `1px solid ${colors.border}`, borderRadius: 8, fontSize: 13 }}>Skipped</button>
-                <button onClick={() => onDelete(entry.id)} style={{ padding: '11px 14px', background: '#fef2f2', color: colors.danger, border: 'none', borderRadius: 8, fontSize: 13 }}>✕</button>
+                <button onClick={() => setExecuting(true)} style={{ flex: 1, padding: 11, background: colors.success, color: colors.white, border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13 }}>Execute</button>
+                <button onClick={() => setEditing(true)} style={{ flex: 1, padding: 11, background: colors.light, color: colors.primary, border: `1px solid ${colors.border}`, borderRadius: 8, fontSize: 13 }}>Edit</button>
+                <button onClick={() => onSkip(entry.id)} style={{ padding: '11px 12px', background: colors.light, color: colors.neutral, border: `1px solid ${colors.border}`, borderRadius: 8, fontSize: 13 }}>Skip</button>
+                <button onClick={() => onDelete(entry.id)} style={{ padding: '11px 12px', background: '#fef2f2', color: colors.danger, border: 'none', borderRadius: 8, fontSize: 13 }}>✕</button>
               </div>
             </div>
           )}
@@ -289,22 +335,30 @@ function PendingEntry({ entry, onExecute, onSkip, onDelete }) {
   );
 }
 
-function OpenEntry({ entry, onClose, onDelete }) {
+function OpenEntry({ entry, onUpdate, onClose, onDelete }) {
   const [expanded, setExpanded] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [editData, setEditData] = useState({ ...entry });
   const [closeData, setCloseData] = useState({ actualExit: '', exitDate: new Date().toISOString().split('T')[0], notes: '' });
   const accent = entry.type === 'A' ? colors.typeA : colors.typeB;
+
+  const handleSaveEdit = () => {
+    onUpdate(editData);
+    setEditing(false);
+  };
 
   const handleClose = () => {
     if (!closeData.actualExit) { alert('Please enter exit price'); return; }
     const pnl = ((parseFloat(closeData.actualExit) - parseFloat(entry.actualEntry)) / parseFloat(entry.actualEntry) * 100).toFixed(2);
-    onClose(entry.id, { actualExit: closeData.actualExit, exitDate: closeData.exitDate, pnl, notes: closeData.notes });
+    const dollarPnl = ((parseFloat(closeData.actualExit) - parseFloat(entry.actualEntry)) / parseFloat(entry.actualEntry) * parseFloat(entry.actualSize) * 1000).toFixed(0);
+    onClose(entry.id, { actualExit: closeData.actualExit, exitDate: closeData.exitDate, pnl, dollarPnl, notes: closeData.notes });
     setClosing(false);
   };
 
   return (
     <div style={{ background: colors.white, borderRadius: 12, marginBottom: 10, overflow: 'hidden', border: `1px solid ${colors.border}` }}>
-      <div onClick={() => setExpanded(!expanded)} style={{ padding: 14, cursor: 'pointer', borderLeft: `4px solid ${accent}` }}>
+      <div onClick={() => !editing && !closing && setExpanded(!expanded)} style={{ padding: 14, cursor: 'pointer', borderLeft: `4px solid ${accent}` }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
@@ -312,17 +366,55 @@ function OpenEntry({ entry, onClose, onDelete }) {
               <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, background: entry.type === 'A' ? '#eff6ff' : '#ecfdf5', color: accent, fontWeight: 600 }}>{entry.type === 'A' ? 'TIPPING' : 'PULLBACK'}</span>
               <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, background: '#dbeafe', color: colors.typeA, fontWeight: 600 }}>OPEN</span>
             </div>
-            <div style={{ fontSize: 11, color: colors.neutral }}>{entry.date} • Score: {entry.score} • Entry: {entry.actualEntry}</div>
+            <div style={{ fontSize: 11, color: colors.neutral }}>{entry.date} • Score: {entry.score} • Entry: ${entry.actualEntry}</div>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: colors.primary }}>{entry.actualSize}</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: colors.primary }}>${entry.actualSize}K</div>
             <div style={{ fontSize: 10, color: colors.neutral }}>position</div>
           </div>
         </div>
       </div>
       {expanded && (
         <div style={{ padding: '0 14px 14px', borderTop: `1px solid ${colors.border}` }}>
-          {closing ? (
+          {editing ? (
+            <div style={{ paddingTop: 12 }}>
+              <div style={{ fontSize: 11, color: colors.neutral, marginBottom: 8, fontWeight: 600 }}>EDIT POSITION</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+                <div>
+                  <label style={{ fontSize: 10, color: colors.neutral }}>Ticker</label>
+                  <input type="text" value={editData.ticker} onChange={(e) => setEditData(prev => ({ ...prev, ticker: e.target.value.toUpperCase() }))} style={{ width: '100%', padding: 10, border: `1px solid ${colors.border}`, borderRadius: 6, boxSizing: 'border-box', marginTop: 4, fontSize: 13, fontWeight: 600 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, color: colors.neutral }}>Date</label>
+                  <input type="date" value={editData.date} onChange={(e) => setEditData(prev => ({ ...prev, date: e.target.value }))} style={{ width: '100%', padding: 10, border: `1px solid ${colors.border}`, borderRadius: 6, boxSizing: 'border-box', marginTop: 4, fontSize: 13 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, color: colors.neutral }}>Position Size ($K)</label>
+                  <input type="number" value={editData.actualSize || ''} onChange={(e) => setEditData(prev => ({ ...prev, actualSize: e.target.value }))} style={{ width: '100%', padding: 10, border: `1px solid ${colors.border}`, borderRadius: 6, boxSizing: 'border-box', marginTop: 4, fontSize: 13 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, color: colors.neutral }}>Entry Price</label>
+                  <input type="number" value={editData.actualEntry || ''} onChange={(e) => setEditData(prev => ({ ...prev, actualEntry: e.target.value }))} style={{ width: '100%', padding: 10, border: `1px solid ${colors.border}`, borderRadius: 6, boxSizing: 'border-box', marginTop: 4, fontSize: 13 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, color: colors.neutral }}>Stop Price</label>
+                  <input type="number" value={editData.plannedStop || ''} onChange={(e) => setEditData(prev => ({ ...prev, plannedStop: e.target.value }))} style={{ width: '100%', padding: 10, border: `1px solid ${colors.border}`, borderRadius: 6, boxSizing: 'border-box', marginTop: 4, fontSize: 13 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, color: colors.neutral }}>Target Price</label>
+                  <input type="number" value={editData.plannedTarget || ''} onChange={(e) => setEditData(prev => ({ ...prev, plannedTarget: e.target.value }))} style={{ width: '100%', padding: 10, border: `1px solid ${colors.border}`, borderRadius: 6, boxSizing: 'border-box', marginTop: 4, fontSize: 13 }} />
+                </div>
+              </div>
+              <div style={{ marginBottom: 10 }}>
+                <label style={{ fontSize: 10, color: colors.neutral }}>Thesis</label>
+                <textarea value={editData.thesis || ''} onChange={(e) => setEditData(prev => ({ ...prev, thesis: e.target.value }))} style={{ width: '100%', padding: 10, border: `1px solid ${colors.border}`, borderRadius: 6, resize: 'none', minHeight: 50, boxSizing: 'border-box', marginTop: 4, fontSize: 13, fontFamily: 'inherit' }} />
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={handleSaveEdit} style={{ flex: 1, padding: 11, background: colors.primary, color: colors.white, border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13 }}>Save</button>
+                <button onClick={() => { setEditing(false); setEditData({ ...entry }); }} style={{ flex: 1, padding: 11, background: colors.light, color: colors.neutral, border: `1px solid ${colors.border}`, borderRadius: 8, fontSize: 13 }}>Cancel</button>
+              </div>
+            </div>
+          ) : closing ? (
             <div style={{ paddingTop: 12 }}>
               <div style={{ fontSize: 11, color: colors.neutral, marginBottom: 8, fontWeight: 600 }}>CLOSE POSITION</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
@@ -348,12 +440,13 @@ function OpenEntry({ entry, onClose, onDelete }) {
             <div style={{ paddingTop: 12 }}>
               <div style={{ fontSize: 12, color: colors.primary, marginBottom: 8 }}><span style={{ color: colors.neutral }}>Thesis:</span> {entry.thesis || '—'}</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, fontSize: 11, marginBottom: 12, background: colors.light, padding: 10, borderRadius: 6 }}>
-                <div><span style={{ color: colors.neutral }}>Entry:</span> <strong>{entry.actualEntry}</strong></div>
-                <div><span style={{ color: colors.neutral }}>Stop:</span> <strong>{entry.plannedStop || '—'}</strong></div>
-                <div><span style={{ color: colors.neutral }}>Target:</span> <strong>{entry.plannedTarget || '—'}</strong></div>
+                <div><span style={{ color: colors.neutral }}>Entry:</span> <strong>${entry.actualEntry}</strong></div>
+                <div><span style={{ color: colors.neutral }}>Stop:</span> <strong>{entry.plannedStop ? `$${entry.plannedStop}` : '—'}</strong></div>
+                <div><span style={{ color: colors.neutral }}>Target:</span> <strong>{entry.plannedTarget ? `$${entry.plannedTarget}` : '—'}</strong></div>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => setClosing(true)} style={{ flex: 1, padding: 11, background: colors.primary, color: colors.white, border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13 }}>Close Position</button>
+                <button onClick={() => setClosing(true)} style={{ flex: 1, padding: 11, background: colors.primary, color: colors.white, border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13 }}>Close</button>
+                <button onClick={() => setEditing(true)} style={{ flex: 1, padding: 11, background: colors.light, color: colors.primary, border: `1px solid ${colors.border}`, borderRadius: 8, fontSize: 13 }}>Edit</button>
                 <button onClick={() => onDelete(entry.id)} style={{ padding: '11px 14px', background: '#fef2f2', color: colors.danger, border: 'none', borderRadius: 8, fontSize: 13 }}>Delete</button>
               </div>
             </div>
@@ -364,14 +457,29 @@ function OpenEntry({ entry, onClose, onDelete }) {
   );
 }
 
-function ClosedEntry({ entry }) {
+function ClosedEntry({ entry, onUpdate, onDelete }) {
   const [expanded, setExpanded] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editData, setEditData] = useState({ ...entry });
   const accent = entry.type === 'A' ? colors.typeA : colors.typeB;
   const pnlNum = parseFloat(entry.pnl);
+  const dollarPnlNum = parseFloat(entry.dollarPnl || 0);
+
+  const handleSaveEdit = () => {
+    // Recalculate P&L if prices changed
+    if (editData.actualEntry && editData.actualExit) {
+      const pnl = ((parseFloat(editData.actualExit) - parseFloat(editData.actualEntry)) / parseFloat(editData.actualEntry) * 100).toFixed(2);
+      const dollarPnl = ((parseFloat(editData.actualExit) - parseFloat(editData.actualEntry)) / parseFloat(editData.actualEntry) * parseFloat(editData.actualSize) * 1000).toFixed(0);
+      editData.pnl = pnl;
+      editData.dollarPnl = dollarPnl;
+    }
+    onUpdate(editData);
+    setEditing(false);
+  };
 
   return (
     <div style={{ background: colors.white, borderRadius: 12, marginBottom: 10, overflow: 'hidden', border: `1px solid ${colors.border}` }}>
-      <div onClick={() => setExpanded(!expanded)} style={{ padding: 14, cursor: 'pointer', borderLeft: `4px solid ${accent}` }}>
+      <div onClick={() => !editing && setExpanded(!expanded)} style={{ padding: 14, cursor: 'pointer', borderLeft: `4px solid ${accent}` }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
@@ -383,20 +491,65 @@ function ClosedEntry({ entry }) {
           </div>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: 20, fontWeight: 700, color: pnlNum >= 0 ? colors.success : colors.danger }}>{pnlNum >= 0 ? '+' : ''}{entry.pnl}%</div>
-            <div style={{ fontSize: 10, color: colors.neutral }}>{entry.actualSize}</div>
+            <div style={{ fontSize: 11, color: pnlNum >= 0 ? colors.success : colors.danger, fontWeight: 600 }}>{dollarPnlNum >= 0 ? '+' : ''}${(dollarPnlNum/1000).toFixed(1)}K</div>
           </div>
         </div>
       </div>
       {expanded && (
         <div style={{ padding: '0 14px 14px', borderTop: `1px solid ${colors.border}` }}>
-          <div style={{ paddingTop: 12 }}>
-            <div style={{ fontSize: 12, color: colors.primary, marginBottom: 8 }}><span style={{ color: colors.neutral }}>Thesis:</span> {entry.thesis || '—'}</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6, fontSize: 11, marginBottom: 8, background: colors.light, padding: 10, borderRadius: 6 }}>
-              <div><span style={{ color: colors.neutral }}>Entry:</span> <strong>{entry.actualEntry}</strong></div>
-              <div><span style={{ color: colors.neutral }}>Exit:</span> <strong>{entry.actualExit}</strong></div>
+          {editing ? (
+            <div style={{ paddingTop: 12 }}>
+              <div style={{ fontSize: 11, color: colors.neutral, marginBottom: 8, fontWeight: 600 }}>EDIT CLOSED TRADE</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+                <div>
+                  <label style={{ fontSize: 10, color: colors.neutral }}>Ticker</label>
+                  <input type="text" value={editData.ticker} onChange={(e) => setEditData(prev => ({ ...prev, ticker: e.target.value.toUpperCase() }))} style={{ width: '100%', padding: 10, border: `1px solid ${colors.border}`, borderRadius: 6, boxSizing: 'border-box', marginTop: 4, fontSize: 13, fontWeight: 600 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, color: colors.neutral }}>Position Size ($K)</label>
+                  <input type="number" value={editData.actualSize || ''} onChange={(e) => setEditData(prev => ({ ...prev, actualSize: e.target.value }))} style={{ width: '100%', padding: 10, border: `1px solid ${colors.border}`, borderRadius: 6, boxSizing: 'border-box', marginTop: 4, fontSize: 13 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, color: colors.neutral }}>Entry Price</label>
+                  <input type="number" value={editData.actualEntry || ''} onChange={(e) => setEditData(prev => ({ ...prev, actualEntry: e.target.value }))} style={{ width: '100%', padding: 10, border: `1px solid ${colors.border}`, borderRadius: 6, boxSizing: 'border-box', marginTop: 4, fontSize: 13 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, color: colors.neutral }}>Exit Price</label>
+                  <input type="number" value={editData.actualExit || ''} onChange={(e) => setEditData(prev => ({ ...prev, actualExit: e.target.value }))} style={{ width: '100%', padding: 10, border: `1px solid ${colors.border}`, borderRadius: 6, boxSizing: 'border-box', marginTop: 4, fontSize: 13 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, color: colors.neutral }}>Entry Date</label>
+                  <input type="date" value={editData.date} onChange={(e) => setEditData(prev => ({ ...prev, date: e.target.value }))} style={{ width: '100%', padding: 10, border: `1px solid ${colors.border}`, borderRadius: 6, boxSizing: 'border-box', marginTop: 4, fontSize: 13 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, color: colors.neutral }}>Exit Date</label>
+                  <input type="date" value={editData.exitDate} onChange={(e) => setEditData(prev => ({ ...prev, exitDate: e.target.value }))} style={{ width: '100%', padding: 10, border: `1px solid ${colors.border}`, borderRadius: 6, boxSizing: 'border-box', marginTop: 4, fontSize: 13 }} />
+                </div>
+              </div>
+              <div style={{ marginBottom: 10 }}>
+                <label style={{ fontSize: 10, color: colors.neutral }}>Notes</label>
+                <textarea value={editData.notes || ''} onChange={(e) => setEditData(prev => ({ ...prev, notes: e.target.value }))} style={{ width: '100%', padding: 10, border: `1px solid ${colors.border}`, borderRadius: 6, resize: 'none', minHeight: 50, boxSizing: 'border-box', marginTop: 4, fontSize: 13, fontFamily: 'inherit' }} />
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={handleSaveEdit} style={{ flex: 1, padding: 11, background: colors.primary, color: colors.white, border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13 }}>Save</button>
+                <button onClick={() => { setEditing(false); setEditData({ ...entry }); }} style={{ flex: 1, padding: 11, background: colors.light, color: colors.neutral, border: `1px solid ${colors.border}`, borderRadius: 8, fontSize: 13 }}>Cancel</button>
+              </div>
             </div>
-            {entry.notes && <div style={{ fontSize: 11, color: colors.neutral, padding: 10, background: colors.light, borderRadius: 6 }}><strong>Notes:</strong> {entry.notes}</div>}
-          </div>
+          ) : (
+            <div style={{ paddingTop: 12 }}>
+              <div style={{ fontSize: 12, color: colors.primary, marginBottom: 8 }}><span style={{ color: colors.neutral }}>Thesis:</span> {entry.thesis || '—'}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, fontSize: 11, marginBottom: 8, background: colors.light, padding: 10, borderRadius: 6 }}>
+                <div><span style={{ color: colors.neutral }}>Size:</span> <strong>${entry.actualSize}K</strong></div>
+                <div><span style={{ color: colors.neutral }}>Entry:</span> <strong>${entry.actualEntry}</strong></div>
+                <div><span style={{ color: colors.neutral }}>Exit:</span> <strong>${entry.actualExit}</strong></div>
+              </div>
+              {entry.notes && <div style={{ fontSize: 11, color: colors.neutral, padding: 10, background: colors.light, borderRadius: 6, marginBottom: 8 }}><strong>Notes:</strong> {entry.notes}</div>}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setEditing(true)} style={{ flex: 1, padding: 11, background: colors.light, color: colors.primary, border: `1px solid ${colors.border}`, borderRadius: 8, fontSize: 13 }}>Edit</button>
+                <button onClick={() => onDelete(entry.id)} style={{ padding: '11px 14px', background: '#fef2f2', color: colors.danger, border: 'none', borderRadius: 8, fontSize: 13 }}>Delete</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -410,13 +563,12 @@ function Journal({ entries, onUpdate, onDelete, onBack }) {
   const open = entries.filter(e => e.executed && !e.pnl).sort((a, b) => new Date(b.date) - new Date(a.date));
   const closed = entries.filter(e => e.executed && e.pnl !== null).sort((a, b) => new Date(b.exitDate) - new Date(a.exitDate));
 
-  // Stats only from closed trades with actual P&L
   const stats = {
     totalTrades: closed.length,
     wins: closed.filter(e => parseFloat(e.pnl) > 0).length,
     winRate: closed.length > 0 ? (closed.filter(e => parseFloat(e.pnl) > 0).length / closed.length * 100).toFixed(0) : null,
     avgPnl: closed.length > 0 ? (closed.reduce((sum, e) => sum + parseFloat(e.pnl), 0) / closed.length).toFixed(1) : null,
-    totalPnl: closed.length > 0 ? closed.reduce((sum, e) => sum + parseFloat(e.pnl), 0).toFixed(1) : null,
+    totalDollarPnl: closed.length > 0 ? closed.reduce((sum, e) => sum + parseFloat(e.dollarPnl || 0), 0) : null,
     avgScore: closed.length > 0 ? (closed.reduce((sum, e) => sum + e.score, 0) / closed.length).toFixed(0) : null,
     highScoreAvgPnl: closed.filter(e => e.score >= 80).length > 0 ? (closed.filter(e => e.score >= 80).reduce((sum, e) => sum + parseFloat(e.pnl), 0) / closed.filter(e => e.score >= 80).length).toFixed(1) : null,
     lowScoreAvgPnl: closed.filter(e => e.score < 80).length > 0 ? (closed.filter(e => e.score < 80).reduce((sum, e) => sum + parseFloat(e.pnl), 0) / closed.filter(e => e.score < 80).length).toFixed(1) : null
@@ -430,7 +582,6 @@ function Journal({ entries, onUpdate, onDelete, onBack }) {
     <div style={{ minHeight: '100vh', background: colors.light, paddingBottom: 'env(safe-area-inset-bottom)' }}>
       <Header title="Trade Journal" onBack={onBack} />
       <div style={{ padding: 16 }}>
-        {/* Performance Stats - Only from closed trades */}
         <div style={{ background: colors.primary, borderRadius: 12, padding: 16, marginBottom: 14 }}>
           <div style={{ fontSize: 10, color: colors.accent, fontWeight: 600, letterSpacing: '0.1em', marginBottom: 12 }}>ACTUAL PERFORMANCE</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, textAlign: 'center' }}>
@@ -439,35 +590,34 @@ function Journal({ entries, onUpdate, onDelete, onBack }) {
               <div style={{ fontSize: 9, color: colors.neutral }}>TRADES</div>
             </div>
             <div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: stats.winRate >= 50 ? colors.success : colors.danger }}>{stats.winRate || '—'}%</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: stats.winRate >= 50 ? colors.success : stats.winRate ? colors.danger : colors.neutral }}>{stats.winRate || '—'}%</div>
               <div style={{ fontSize: 9, color: colors.neutral }}>WIN RATE</div>
             </div>
             <div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: parseFloat(stats.avgPnl) >= 0 ? colors.success : colors.danger }}>{stats.avgPnl || '—'}%</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: parseFloat(stats.avgPnl) >= 0 ? colors.success : stats.avgPnl ? colors.danger : colors.neutral }}>{stats.avgPnl || '—'}%</div>
               <div style={{ fontSize: 9, color: colors.neutral }}>AVG P&L</div>
             </div>
             <div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: parseFloat(stats.totalPnl) >= 0 ? colors.success : colors.danger }}>{stats.totalPnl ? `${parseFloat(stats.totalPnl) >= 0 ? '+' : ''}${stats.totalPnl}%` : '—'}</div>
-              <div style={{ fontSize: 9, color: colors.neutral }}>TOTAL</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: stats.totalDollarPnl >= 0 ? colors.success : stats.totalDollarPnl ? colors.danger : colors.neutral }}>{stats.totalDollarPnl !== null ? `${stats.totalDollarPnl >= 0 ? '+' : ''}$${(stats.totalDollarPnl/1000).toFixed(1)}K` : '—'}</div>
+              <div style={{ fontSize: 9, color: colors.neutral }}>TOTAL $</div>
             </div>
           </div>
           {closed.length >= 3 && (
             <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 11 }}>
                 <div style={{ background: 'rgba(255,255,255,0.05)', padding: 10, borderRadius: 6 }}>
-                  <div style={{ color: colors.neutral, marginBottom: 2 }}>High Score (80+) Avg P&L</div>
-                  <div style={{ color: stats.highScoreAvgPnl && parseFloat(stats.highScoreAvgPnl) >= 0 ? colors.success : colors.danger, fontWeight: 700 }}>{stats.highScoreAvgPnl || '—'}%</div>
+                  <div style={{ color: colors.neutral, marginBottom: 2 }}>High Score (80+)</div>
+                  <div style={{ color: stats.highScoreAvgPnl && parseFloat(stats.highScoreAvgPnl) >= 0 ? colors.success : colors.danger, fontWeight: 700 }}>{stats.highScoreAvgPnl || '—'}% avg</div>
                 </div>
                 <div style={{ background: 'rgba(255,255,255,0.05)', padding: 10, borderRadius: 6 }}>
-                  <div style={{ color: colors.neutral, marginBottom: 2 }}>Low Score (60-79) Avg P&L</div>
-                  <div style={{ color: stats.lowScoreAvgPnl && parseFloat(stats.lowScoreAvgPnl) >= 0 ? colors.success : colors.danger, fontWeight: 700 }}>{stats.lowScoreAvgPnl || '—'}%</div>
+                  <div style={{ color: colors.neutral, marginBottom: 2 }}>Low Score (60-79)</div>
+                  <div style={{ color: stats.lowScoreAvgPnl && parseFloat(stats.lowScoreAvgPnl) >= 0 ? colors.success : colors.danger, fontWeight: 700 }}>{stats.lowScoreAvgPnl || '—'}% avg</div>
                 </div>
               </div>
             </div>
           )}
         </div>
 
-        {/* Tabs */}
         <div style={{ display: 'flex', gap: 0, marginBottom: 14, background: colors.white, borderRadius: 10, padding: 4, border: `1px solid ${colors.border}` }}>
           {[
             { key: 'pending', label: 'Pending', count: pending.length },
@@ -480,7 +630,6 @@ function Journal({ entries, onUpdate, onDelete, onBack }) {
           ))}
         </div>
 
-        {/* Tab Content */}
         {tab === 'pending' && (
           pending.length === 0 ? (
             <div style={{ textAlign: 'center', padding: 40, color: colors.neutral, background: colors.white, borderRadius: 12, border: `1px solid ${colors.border}` }}>
@@ -490,8 +639,8 @@ function Journal({ entries, onUpdate, onDelete, onBack }) {
             </div>
           ) : (
             <>
-              <div style={{ fontSize: 11, color: colors.neutral, marginBottom: 10, padding: '0 4px' }}>Trades scored but not yet executed. Record your actual entry when you take the trade.</div>
-              {pending.map(e => <PendingEntry key={e.id} entry={e} onExecute={handleExecute} onSkip={handleSkip} onDelete={onDelete} />)}
+              <div style={{ fontSize: 11, color: colors.neutral, marginBottom: 10, padding: '0 4px' }}>Scored but not executed. Record actual entry when you take the trade.</div>
+              {pending.map(e => <PendingEntry key={e.id} entry={e} onUpdate={onUpdate} onExecute={handleExecute} onSkip={handleSkip} onDelete={onDelete} />)}
             </>
           )
         )}
@@ -505,8 +654,8 @@ function Journal({ entries, onUpdate, onDelete, onBack }) {
             </div>
           ) : (
             <>
-              <div style={{ fontSize: 11, color: colors.neutral, marginBottom: 10, padding: '0 4px' }}>Active positions. Close them when you exit to record your P&L.</div>
-              {open.map(e => <OpenEntry key={e.id} entry={e} onClose={handleClose} onDelete={onDelete} />)}
+              <div style={{ fontSize: 11, color: colors.neutral, marginBottom: 10, padding: '0 4px' }}>Active positions. Close to record P&L.</div>
+              {open.map(e => <OpenEntry key={e.id} entry={e} onUpdate={onUpdate} onClose={handleClose} onDelete={onDelete} />)}
             </>
           )
         )}
@@ -515,13 +664,13 @@ function Journal({ entries, onUpdate, onDelete, onBack }) {
           closed.length === 0 ? (
             <div style={{ textAlign: 'center', padding: 40, color: colors.neutral, background: colors.white, borderRadius: 12, border: `1px solid ${colors.border}` }}>
               <div style={{ fontSize: 32, marginBottom: 8 }}>📊</div>
-              <div style={{ fontWeight: 600 }}>No closed trades yet</div>
-              <div style={{ fontSize: 12, marginTop: 4 }}>Close an open position to see your performance</div>
+              <div style={{ fontWeight: 600 }}>No closed trades</div>
+              <div style={{ fontSize: 12, marginTop: 4 }}>Close a position to see performance</div>
             </div>
           ) : (
             <>
-              <div style={{ fontSize: 11, color: colors.neutral, marginBottom: 10, padding: '0 4px' }}>Completed trades with final P&L. These feed your performance stats.</div>
-              {closed.map(e => <ClosedEntry key={e.id} entry={e} />)}
+              <div style={{ fontSize: 11, color: colors.neutral, marginBottom: 10, padding: '0 4px' }}>Completed trades with final P&L.</div>
+              {closed.map(e => <ClosedEntry key={e.id} entry={e} onUpdate={onUpdate} onDelete={onDelete} />)}
             </>
           )
         )}
@@ -546,7 +695,7 @@ export default function App() {
   const pending = entries.filter(e => !e.executed && e.score >= 60).length;
   const open = entries.filter(e => e.executed && !e.pnl).length;
   const closed = entries.filter(e => e.executed && e.pnl !== null);
-  const totalPnl = closed.length > 0 ? closed.reduce((sum, e) => sum + parseFloat(e.pnl), 0).toFixed(1) : null;
+  const totalDollarPnl = closed.length > 0 ? closed.reduce((sum, e) => sum + parseFloat(e.dollarPnl || 0), 0) : null;
 
   return (
     <div style={{ minHeight: '100vh', background: colors.primary, paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
@@ -565,7 +714,7 @@ export default function App() {
             <div style={{ fontSize: 9, color: colors.neutral, fontWeight: 500, letterSpacing: '0.1em', marginTop: 2 }}>OPEN</div>
           </div>
           <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 14, textAlign: 'center', border: '1px solid rgba(255,255,255,0.08)' }}>
-            <div style={{ fontSize: 26, fontWeight: 800, color: totalPnl !== null ? (parseFloat(totalPnl) >= 0 ? colors.success : colors.danger) : colors.neutral }}>{totalPnl !== null ? `${parseFloat(totalPnl) >= 0 ? '+' : ''}${totalPnl}%` : '—'}</div>
+            <div style={{ fontSize: 26, fontWeight: 800, color: totalDollarPnl !== null ? (totalDollarPnl >= 0 ? colors.success : colors.danger) : colors.neutral }}>{totalDollarPnl !== null ? `${totalDollarPnl >= 0 ? '+' : ''}$${(totalDollarPnl/1000).toFixed(0)}K` : '—'}</div>
             <div style={{ fontSize: 9, color: colors.neutral, fontWeight: 500, letterSpacing: '0.1em', marginTop: 2 }}>TOTAL P&L</div>
           </div>
         </div>
@@ -582,9 +731,9 @@ export default function App() {
           <div><div style={{ color: colors.accent, fontSize: 16, fontWeight: 700 }}>Trade Journal</div><div style={{ color: colors.neutral, fontSize: 12, marginTop: 2 }}>Review & manage positions</div></div>
         </button>
         <div style={{ marginTop: 24, padding: 16, background: 'rgba(255,255,255,0.03)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.06)' }}>
-          <div style={{ fontSize: 9, fontWeight: 600, marginBottom: 12, color: colors.neutral, letterSpacing: '0.1em' }}>POSITION SIZING THRESHOLDS</div>
+          <div style={{ fontSize: 9, fontWeight: 600, marginBottom: 12, color: colors.neutral, letterSpacing: '0.1em' }}>POSITION SIZING ($K)</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
-            {[{ score: '<60', size: 'No Trade', color: colors.danger }, { score: '60-69', size: '5-10%', color: colors.warning }, { score: '70-79', size: '10-20%', color: colors.typeA }, { score: '80-89', size: '20-25%', color: colors.success }, { score: '90+', size: '25-30%', color: colors.success }].map((t, i) => (
+            {[{ score: '<60', size: '$0', color: colors.danger }, { score: '60-69', size: '$10-25K', color: colors.warning }, { score: '70-79', size: '$25-50K', color: colors.typeA }, { score: '80-89', size: '$50-75K', color: colors.success }, { score: '90+', size: '$75-100K', color: colors.success }].map((t, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', background: 'rgba(255,255,255,0.03)', borderRadius: 6, fontSize: 11 }}>
                 <span style={{ color: colors.neutral }}>{t.score}</span>
                 <span style={{ color: t.color, fontWeight: 600 }}>{t.size}</span>
