@@ -125,25 +125,25 @@ function SyncStatus({ status }) {
 // SCORECARD CONFIGS
 // ============================================================================
 const TYPE_A_CONFIG = {
-  name: 'Tipping Point',
+  name: 'Tipping Point/IPO',
   sections: [
-    { title: 'Trend Quality', maxPoints: 25, signals: [
-      { id: 'thesis_intact', label: 'Original thesis intact', max: 10, hints: ['10: Unchanged', '7: Minor concerns', '4: Degraded', '0: Broken'] },
-      { id: 'prior_breakout', label: 'Prior breakout quality', max: 8, hints: ['8: Textbook', '5: Solid', '2: Weak', '0: Never broke out'] },
-      { id: 'price_structure', label: 'Price structure', max: 7, hints: ['7: Above 21 EMA', '5: Testing 50 MA', '2: Below 50', '0: Broken'] },
+    { title: 'Sector Quality', maxPoints: 25, signals: [
+      { id: 'bullish_market', label: 'market strength', max: 10, hints: ['10: Very strong', '7: Strong', '4: Weak', '0: Very weak'] },
+      { id: 'price_dislocation', label: 'undervaluation', max: 8, hints: ['8: Very ignored', '5: Ignored', '2: Recognized', '0: Well covered'] },
+      { id: 'continuous newsflow', label: 'newsflow', max: 7, hints: ['7: 3-6 months', '5: 1-3 months', '2: less than 1 month', '0: 1 week'] },
     ]},
-    { title: 'Pullback Quality', maxPoints: 25, signals: [
-      { id: 'volume_contraction', label: 'Volume contraction', max: 10, hints: ['10: <50% of breakout', '7: Lighter', '4: Similar', '0: Increasing'] },
-      { id: 'support_quality', label: 'Support quality', max: 9, hints: ['9: Confluence', '6: Single clear', '3: Near support', '0: None'] },
-      { id: 'news_check', label: 'News check', max: 6, hints: ['6: No bad news', '4: Minor', '2: Concerning', '0: Thesis impaired'] },
+    { title: 'Company Quality', maxPoints: 25, signals: [
+      { id: 'business_quality', label: 'hype_potential', max: 10, hints: ['10: <50% of breakout', '7: Lighter', '4: Similar', '0: Increasing'] },
+      { id: 'founder_quality', label: 'well-known founder', max: 9, hints: ['9: Confluence', '6: Single clear', '3: Near support', '0: None'] },
+      { id: 'backer_quality', label: 'good institutions', max: 6, hints: ['6: No bad news', '4: Minor', '2: Concerning', '0: Thesis impaired'] },
     ]},
-    { title: 'Re-entry Timing', maxPoints: 20, signals: [
-      { id: 'stabilization', label: 'Stabilization evidence', max: 10, hints: ['10: Reversal signal', '7: Stabilizing', '4: Early', '0: Falling knife'] },
-      { id: 'risk_reward', label: 'Risk/reward check', max: 10, hints: ['10: R/R >3:1', '7: 2-3:1', '4: ~1.5:1', '0: <1.5:1'] },
+    { title: 'Catalyst quality', maxPoints: 20, signals: [
+      { id: 'Catalyst_quality', label: 'fundamentally changing', max: 10, hints: ['10: Longterm potential', '7: 1-2 months potential', '4: 1-2 weeks potential', '1 pump potential'] },
+      { id: 'upside', label: 'Risk/reward check', max: 10, hints: ['10: R/R >3:1', '7: 2-3:1', '4: ~1.5:1', '0: <1.5:1'] },
     ]},
     { title: 'Risk Definition', maxPoints: 30, signals: [
-      { id: 'stop_below', label: 'Stop below support', max: 12, hints: ['12: Just below invalidation', '9: Defined', '5: Rough', '0: None'] },
-      { id: 'size_volatility', label: 'Size vs. volatility', max: 10, hints: ['10: Stop-out = 1-2% loss', '6: Roughly ok', '3: Arbitrary', '0: Ignoring'] },
+      { id: 'stop_defined', label: 'Support defined', max: 12, hints: ['12: Low downside', '9: 10% downside', '5: Lots of downside', '0: Cant define'] },
+      { id: 'size_defined', label: 'Size vs. downside', max: 10, hints: ['10: Stop-out = 1-2% loss', '6: Roughly ok', '3: Arbitrary', '0: Ignoring'] },
       { id: 'target_defined', label: 'Target defined', max: 8, hints: ['8: Target + horizon', '5: Rough target', '2: Vague', '0: None'] },
     ]}
   ]
