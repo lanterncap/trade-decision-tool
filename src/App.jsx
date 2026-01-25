@@ -167,8 +167,8 @@ const TYPE_B_CONFIG = {
       { id: 'risk_reward', label: 'Risk/reward check', max: 10, hints: ['10: R/R >3:1', '7: 2-3:1', '4: ~1.5:1', '0: <1.5:1'] },
     ]},
     { title: 'Risk Definition', maxPoints: 30, signals: [
-      { id: 'stop_below', label: 'Stop below support', max: 12, hints: ['12: Just below invalidation', '9: Defined', '5: Rough', '0: None'] },
-      { id: 'size_volatility', label: 'Size vs. volatility', max: 10, hints: ['10: Stop-out = 1-2% loss', '6: Roughly ok', '3: Arbitrary', '0: Ignoring'] },
+     { id: 'stop_defined', label: 'Support defined', max: 12, hints: ['12: Low downside', '9: 10% downside', '5: Lots of downside', '0: Cant define'] },
+      { id: 'size_defined', label: 'Size vs. downside', max: 10, hints: ['10: Stop-out = 1-2% loss', '6: Roughly ok', '3: Arbitrary', '0: Ignoring'] },
       { id: 'target_defined', label: 'Target defined', max: 8, hints: ['8: Target + horizon', '5: Rough target', '2: Vague', '0: None'] },
     ]}
   ]
