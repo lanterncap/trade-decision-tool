@@ -472,7 +472,7 @@ function Scorecard({ onLog, onCancel }) {
       date: new Date().toISOString().split('T')[0],
       ticker: tradeInfo.ticker.trim().toUpperCase(),
       type: 'MULT',
-      score: parseFloat(pct.toFixed(2)),
+      score: Math.round(pct),             // integer — full precision stored in factor_scores
       decision: decision.text,
       suggested_size: `$${sizeK.toFixed(1)}K`,
       planned_entry:  tradeInfo.entry  ? parseFloat(tradeInfo.entry)  : null,
