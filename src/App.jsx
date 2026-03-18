@@ -104,17 +104,17 @@ const FACTORS = [
     ],
   },
   {
-    id: '10X_factor',
-    label: '10X factor',
-    abbr: 'TS',
-    description: 'Potential for a 10X',
+    id: 'technical_setup',
+    label: '10x Potential',
+    abbr: '10X',
+    description: 'Retail following vs institutional efficiency',
     hints: [
-      { label: 'VETO',        text: 'Only institution and no retail' },
-      { label: 'POOR',        text: 'Unfollowed sector' },
-      { label: 'WEAK',        text: 'Only institution and niche followers' },
-      { label: 'DECENT',      text: 'Good story' },
-      { label: 'GOOD',        text: 'Retail well-known' },
-      { label: 'PERFECT',     text: 'Retail super-hype' },
+      { label: 'ZERO',        text: 'Large cap, heavily institutionalized — market is efficient, no room to run' },
+      { label: 'MINIMAL',     text: 'Mid-large cap, well-covered by analysts, retail present but price is fair' },
+      { label: 'LIMITED',     text: 'Mid cap, mixed coverage — some inefficiency but thesis is widely known' },
+      { label: 'POSSIBLE',    text: 'Small cap, growing retail following, under-covered by institutions' },
+      { label: 'LIKELY',      text: 'Micro cap, strong retail community, minimal institutional ownership' },
+      { label: 'ASYMMETRIC',  text: 'Nano/micro cap, passionate retail following, near-zero institutions — genuine 10x path exists' },
     ],
   },
   {
@@ -468,7 +468,7 @@ function Scorecard({ onLog, onCancel }) {
     if (!tradeInfo.ticker.trim()) { alert('Enter a ticker symbol'); return; }
     setSaving(true);
     const decision = getDecision(pct, hasZero);
-    await onLog({
+    const success = await onLog({
       date: new Date().toISOString().split('T')[0],
       ticker: tradeInfo.ticker.trim().toUpperCase(),
       type: 'MULT',
@@ -483,6 +483,7 @@ function Scorecard({ onLog, onCancel }) {
       executed: false,
     });
     setSaving(false);
+    // navigation to journal happens in parent only if save succeeded
   };
 
   const inp = { padding: '11px 12px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 14, color: C.text, width: '100%', outline: 'none' };
@@ -1108,9 +1109,29 @@ export default function App() {
 
   const addTrade = async (trade) => {
     setSyncStatus('syncing');
-    const { data } = await supabase.from('trades').insert([{ ...trade, user_id: user.id }]).select().single();
+    const payload = { ...trade, user_id: user.id };
+
+    // First attempt: full payload including factor_scores
+    let { data, error } = await supabase.from('trades').insert([payload]).select().single();
+
+    // If factor_scores column missing, retry without it
+    if (error && error.message && error.message.includes('factor_scores')) {
+      const { factor_scores, ...payloadWithout } = payload;
+      const result = await supabase.from('trades').insert([payloadWithout]).select().single();
+      data = result.data;
+      error = result.error;
+    }
+
+    if (error) {
+      console.error('Save failed:', error.message);
+      setSyncStatus('error');
+      alert('Failed to save trade: ' + error.message);
+      return false;
+    }
+
     if (data) setTrades(p => [data, ...p]);
     setSyncStatus('synced');
+    return true;
   };
 
   const updateTrade = async (trade) => {
@@ -1157,7 +1178,7 @@ export default function App() {
 
   if (!user) return <AuthScreen />;
 
-  if (view === 'scorecard') return <Scorecard onLog={async (t) => { await addTrade(t); setView('journal'); }} onCancel={() => setView('home')} />;
+  if (view === 'scorecard') return <Scorecard onLog={async (t) => { const ok = await addTrade(t); if (ok) setView('journal'); }} onCancel={() => setView('home')} />;
   if (view === 'journal')   return <Journal   trades={trades} onUpdate={updateTrade} onDelete={deleteTrade} onBack={() => setView('home')} syncStatus={syncStatus} />;
   if (view === 'watchlist') return <Watchlist watchlist={watchlist} onAdd={addToWatchlist} onUpdate={updateWatchlistItem} onRemove={removeFromWatchlist} onBack={() => setView('home')} />;
 
